@@ -20,4 +20,6 @@ android {
 }
 
 dependencies {
+    compile project(':LibDBAccess')
+    compile 'com.hianzuo.android:LibViewInject:1.0.0'
 }
