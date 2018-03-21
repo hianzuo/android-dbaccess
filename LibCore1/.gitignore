@@ -1,0 +1,16 @@
+*.iml
+/local.properties
+/project.properties
+/build
+/bin
+/out
+/gen
+/gradle
+/captures
+/.gradle
+/.DS_Store
+/.idea
+/.settings
+/.classpath
+/.project
+/.amateras

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="yunpos_toast_flyhand_min_height">120dp</dimen>
+    <dimen name="yunpos_toast_flyhand_min_width">180dp</dimen>
+    <dimen name="yunpos_toast_flyhand_logo_size">38sp</dimen>
+    <dimen name="yunpos_toast_flyhand_text_size">20sp</dimen>
+</resources>

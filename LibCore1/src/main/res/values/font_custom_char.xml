@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fc_alipay_o">&#xf000;</string>
+    <string name="fc_alipay">&#xf001;</string>
+    <string name="fc_delete">&#xf002;</string>
+    <string name="fc_yunpos">&#xf003;</string>
+    <string name="fc_switch_camera">&#xf007;</string>
+</resources>

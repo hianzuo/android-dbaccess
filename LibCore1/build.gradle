@@ -1,0 +1,39 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 25
+    buildToolsVersion "25.0.2"
+
+
+    defaultConfig {
+        minSdkVersion 15
+        targetSdkVersion 25
+        versionCode 1
+        versionName "1.0"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    sourceSets {
+        main {
+            aidl.srcDirs = ['src/main/java']
+            assets.srcDirs = ['src/main/assets', 'src/main/assets/']
+            jni.srcDirs = []
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(include: ['*.jar'], dir: 'libs')
+    testCompile 'junit:junit:4.12'
+    compile 'com.hianzuo.android:LibAndroidLogger:1.0.8'
+    compile 'com.hianzuo.android:LibSpring:1.0.7'
+    compile 'org.apache.httpcomponents:httpcore:4.4.4'
+    compile 'com.android.support:support-v4:25.3.1'
+    compile 'com.google.code.gson:gson:2.8.0'
+    compile 'org.greenrobot:eventbus:3.0.0'
+    compile 'org.zeromq:jeromq:0.3.6'
+}
