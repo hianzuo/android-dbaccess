@@ -9,17 +9,12 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/LibCore1" />
             <option value="$PROJECT_DIR$/LibDBAccess" />
             <option value="$PROJECT_DIR$/app" />
           </set>
         </option>
-        <option name="myModules">
-          <set>
-            <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/LibDBAccess" />
-            <option value="$PROJECT_DIR$/app" />
-          </set>
-        </option>
+        <option name="resolveModulePerSourceSet" value="false" />
       </GradleProjectSettings>
     </option>
   </component>

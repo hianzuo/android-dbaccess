@@ -2,8 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/DBAccess.iml" filepath="$PROJECT_DIR$/DBAccess.iml" />
+      <module fileurl="file://$PROJECT_DIR$/LibCore1/LibCore.iml" filepath="$PROJECT_DIR$/LibCore1/LibCore.iml" />
       <module fileurl="file://$PROJECT_DIR$/LibDBAccess/LibDBAccess.iml" filepath="$PROJECT_DIR$/LibDBAccess/LibDBAccess.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android-dbaccess.iml" filepath="$PROJECT_DIR$/android-dbaccess.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>

@@ -13,7 +13,16 @@ public class DBSqlException extends RuntimeException {
     public DBSqlException(String sql, Throwable throwable, String... params) {
         super("sql[" + (null == sql ? "NULL" : sql) + "], params[" + StringUtil.join(params, ",") + "]", throwable);
     }
+
     public DBSqlException(String sql, Throwable throwable, Object... params) {
         super("sql[" + (null == sql ? "NULL" : sql) + "], params[" + StringUtil.join(params, ",") + "]", throwable);
+    }
+
+    public boolean isCause(Class<? extends Throwable> classThrow) {
+        Throwable cause = getCause();
+        if (null != cause && classThrow.isAssignableFrom(cause.getClass())) {
+            return true;
+        }
+        return false;
     }
 }

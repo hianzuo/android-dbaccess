@@ -13,16 +13,21 @@ public class MD5Utils {
     public static String MD5(String src) {
         try {
             int i;
-            if (src == null) return null;
+            if (src == null) {
+                return null;
+            }
             MessageDigest md = MessageDigest.getInstance("MD5");
             md.update(src.getBytes());
-            byte b[] = md.digest();
+            byte[] b = md.digest();
             StringBuffer buf = new StringBuffer();
             for (byte aB : b) {
                 i = aB;
-                if (i < 0) i += 256;
-                if (i < 16)
+                if (i < 0) {
+                    i += 256;
+                }
+                if (i < 16) {
                     buf.append("0");
+                }
                 buf.append(Integer.toHexString(i));
             }
             return buf.toString();
@@ -35,12 +40,16 @@ public class MD5Utils {
     public static final String SHA1 = "SHA1";
 
     public static String md5(String value) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         return md5(value.getBytes());
     }
 
     public static String md5(String value, String charset) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         try {
             return md5(value.getBytes(charset));
         } catch (UnsupportedEncodingException e) {
@@ -53,12 +62,16 @@ public class MD5Utils {
     }
 
     public static String sha1(String value) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         return sha1(value.getBytes());
     }
 
     public static String sha1(String value, String charset) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         try {
             return sha1(value.getBytes(charset));
         } catch (UnsupportedEncodingException e) {
@@ -71,7 +84,9 @@ public class MD5Utils {
     }
 
     public static String encode(String algorithm, String value) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         return encode(algorithm, value.getBytes());
     }
 

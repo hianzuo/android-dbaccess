@@ -36,10 +36,14 @@ public class DBDataException extends RuntimeException {
                 dtoData = uploadDtoGson.toJson(dto);
             }
         }
-        if (null == detailMessage) detailMessage = "";
+        if (null == detailMessage) {
+            detailMessage = "";
+        }
         if (null != throwable) {
             String message = throwable.getMessage();
-            if (null == message) message = throwable.getClass().getSimpleName();
+            if (null == message) {
+                message = throwable.getClass().getSimpleName();
+            }
             detailMessage = detailMessage + "#" + message;
         }
         return "\nDetailMessage:" + detailMessage + "\n\nDtoData:\n[" + dtoData + "]";

@@ -1,1 +1,2 @@
-include ':app', ':LibDBAccess'
+include ':app', ':LibDBAccess', ':LibCore'
+project(':LibCore').projectDir = new File('LibCore1')

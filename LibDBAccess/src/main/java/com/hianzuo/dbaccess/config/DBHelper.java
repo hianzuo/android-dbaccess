@@ -3,8 +3,8 @@ package com.hianzuo.dbaccess.config;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.util.Log;
 
+import com.hianzuo.logger.Log;
 import com.hianzuo.dbaccess.DBInterface;
 import com.hianzuo.dbaccess.Database;
 import com.hianzuo.dbaccess.Dto;
@@ -43,12 +43,12 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public DBHelper() {
         super(getContext(), getDBConfig().getDBFile(), null, getDBConfig().getDBVersion());
-        Log.e("DBHelper", getDatabaseName());
+        Log.d("DBHelper", getDatabaseName());
     }
 
     public DBHelper(Integer dbVersion) {
         super(getContext(), getDBConfig().getDBFile(), null, dbVersion);
-        Log.e("DBHelper1", getDatabaseName());
+        Log.d("DBHelper", getDatabaseName());
     }
 
 
@@ -70,10 +70,8 @@ public class DBHelper extends SQLiteOpenHelper {
     @Override
     public synchronized void close() {
         if (mOpenCounter.decrementAndGet() == 0) {
-            // Closing database
-            super.close();
             if (null != mDefaultWritableDatabase) {
-                mDefaultWritableDatabase.close();
+                new Database(mDefaultWritableDatabase).close();
             }
             mDefaultWritableDatabase = null;
         }
@@ -81,10 +79,8 @@ public class DBHelper extends SQLiteOpenHelper {
 
     public synchronized void forceClose() {
         try {
-            // Closing database
-            super.close();
             if (null != mDefaultWritableDatabase) {
-                mDefaultWritableDatabase.close();
+                new Database(mDefaultWritableDatabase).close();
             }
             mDefaultWritableDatabase = null;
         } finally {
@@ -93,23 +89,35 @@ public class DBHelper extends SQLiteOpenHelper {
     }
 
     public static boolean deleteDatabase(Context context) {
-        try {
-            DBInterface.lock();
-            return context.deleteDatabase(getDBConfig().getDBFile());
-        } finally {
-            DBInterface.unlock();
-        }
+        return context.deleteDatabase(getDBConfig().getDBFile());
     }
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        onOpen(new Database(db));
+        Log.d("DBHelper", "onCreate :dbVersion:" + db.getVersion());
+        Database database = new Database(db);
+        onOpen(database);
+        onCreateDatabase(database);
         mDefaultWritableDatabase = db;
     }
+
+    private boolean isCalledCreateDatabase = false;
+
+    private void onCreateDatabase(Database database) {
+        if (database.isReadOnly()) {
+            return;
+        }
+        if (!isCalledCreateDatabase) {
+            isCalledCreateDatabase = true;
+            getDBConfig().onCreateDatabase(database);
+        }
+    }
+
 
 
     @Override
     public void onDowngrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        Log.d("DBHelper", "onDowngrade :newVersion:" + newVersion + ",oldVersion:" + oldVersion);
         super.onDowngrade(db, oldVersion, newVersion);
         mDefaultWritableDatabase = db;
         onOpen(new Database(db));
@@ -118,18 +126,18 @@ public class DBHelper extends SQLiteOpenHelper {
     @Override
     public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
         try {
+            Log.d("DBHelper", "onUpgrade:newVersion:" + newVersion + ",oldVersion:" + oldVersion);
             mDefaultWritableDatabase = database;
             Database db = new Database(database);
             this.onOpen(db);
             getDBConfig().onUpgrade(db, oldVersion, newVersion);
-            Log.e("DBHelper", "CHECK_STRUCTURE_WHEN_UPDATE:newVersion:" + newVersion + ",oldVersion:" + oldVersion);
             getDBConfig().beforeUpdateDBStructure(db, oldVersion, newVersion);
             //检查更新程序需要的表结构
             checkAndUpdateDBTableStructure(db);
-            // 检查更新维护数据的表结构
+            // 检查更新需要更新的版本号
             getDBConfig().afterUpdateDBStructure(db, oldVersion, newVersion);
         } catch (Exception e) {
-            Log.e("DBHelper", e.getMessage());
+            Log.e("DBHelper", "on update database failure",e);
             e.printStackTrace();
             throw e;
         }
@@ -139,7 +147,9 @@ public class DBHelper extends SQLiteOpenHelper {
     private boolean isCalledOpen = false;
 
     private void onOpen(Database database) {
-        if (database.isReadOnly()) return;
+        if (database.isReadOnly()) {
+            return;
+        }
         if (!isCalledOpen) {
             isCalledOpen = true;
             getDBConfig().onOpen(database);
@@ -176,7 +186,7 @@ public class DBHelper extends SQLiteOpenHelper {
                 continue;
             }
             boolean needUpdate = oldTable.needUpdate(getDBConfig(), tClass, newTable);
-            Log.e("DBHelper", "NeedUpdate:" + needUpdate + ",Table:" + newTable.getClassName());
+            Log.d("DBHelper", "NeedUpdate:" + needUpdate + ",Table:" + newTable.getClassName());
             if (needUpdate) {
                 printSQL("Update Dto[" + newTable.getClassName() + "]...");
                 long startTime = System.currentTimeMillis();
@@ -316,5 +326,9 @@ public class DBHelper extends SQLiteOpenHelper {
         if (getDBConfig().isPrintSQL()) {
             Log.i(getDBConfig().getDBFile(), sql);
         }
+    }
+
+    public static boolean isExecSQLUpdating() {
+        return getDBConfig().isExecSQLUpdating();
     }
 }

@@ -4,17 +4,23 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
+
 import com.hianzuo.dbaccess.config.DBHelper;
 import com.hianzuo.dbaccess.inject.Column;
 import com.hianzuo.dbaccess.inject.FromDB;
+import com.hianzuo.dbaccess.lang.DbList;
 import com.hianzuo.dbaccess.sql.builder.WhereBuilder;
 import com.hianzuo.dbaccess.throwable.DBDataException;
 import com.hianzuo.dbaccess.throwable.DBRuntimeException;
 import com.hianzuo.dbaccess.util.ClassFieldUtil;
 import com.hianzuo.dbaccess.util.CursorUtils;
+import com.hianzuo.dbaccess.util.ForeachCallback;
 import com.hianzuo.dbaccess.util.StringUtil;
+import com.flyhand.core.utils.ClazzUtil;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.DecimalFormat;
@@ -58,7 +64,9 @@ public class DBInterface extends BaseDBInterface {
         try {
             lock();
             String tableName = getTableName(tClass);
-            if (null == db) db = openWritableDatabase();
+            if (null == db) {
+                db = openWritableDatabase();
+            }
             if (isTableExist(db, tableName)) {
                 ContentValues updateCVS = getContentValues(update, includeNullValue);
                 ContentValues whereCVS = getContentValues(where, false);
@@ -113,9 +121,10 @@ public class DBInterface extends BaseDBInterface {
         }
         String tableName = getTableName(tClass);
         if (isTableExist(db, tableName)) {
+            if (inTransaction) {
+                db.beginTransaction();
+            }
             try {
-                lock();
-                if (inTransaction) db.beginTransaction();
                 for (int i = 0; i < updates.size(); i++) {
                     Dto update = updates.get(i);
                     Dto where = wheres.get(i);
@@ -126,10 +135,13 @@ public class DBInterface extends BaseDBInterface {
                     Object[] objs = getBindArgs(updateCVS, whereCVS);
                     execSQL(db, updateSQL + whereSQL, objs);
                 }
-                if (inTransaction) db.setTransactionSuccessful();
+                if (inTransaction) {
+                    db.setTransactionSuccessful();
+                }
             } finally {
-                if (inTransaction) db.endTransaction();
-                unlock();
+                if (inTransaction) {
+                    db.endTransaction();
+                }
             }
         }
     }
@@ -164,9 +176,8 @@ public class DBInterface extends BaseDBInterface {
         String tableName = getTableName(dto.getClass());
         Database db = openWritableDatabase();
         int ret;
+        db.beginTransaction();
         try {
-            lock();
-            db.beginTransaction();
             Class clz = dto.getClass();
             if (dto.equals(readByMaxId(clz))) {
                 ret = -1;
@@ -184,7 +195,6 @@ public class DBInterface extends BaseDBInterface {
             throw new DBDataException(dto, e);
         } finally {
             db.endTransaction();
-            unlock();
         }
         return ret;
     }
@@ -210,7 +220,9 @@ public class DBInterface extends BaseDBInterface {
     public static int delete(Database db, Class<? extends Dto> clz, String id) {
         try {
             lock();
-            if (null == db) db = openWritableDatabase();
+            if (null == db) {
+                db = openWritableDatabase();
+            }
             String tableName = getTableName(clz);
             if (isTableExist(db, tableName)) {
                 return delete(db, tableName, "id = ?", String.valueOf(id));
@@ -249,7 +261,9 @@ public class DBInterface extends BaseDBInterface {
      * @return 删除成功返回大于0 否则返回式－1
      */
     public static int deleteAll(Database database, String tableName) {
-        if (null == database) database = openWritableDatabase();
+        if (null == database) {
+            database = openWritableDatabase();
+        }
         if (isTableExist(database, tableName)) {
             return delete(database, tableName, null);
         }
@@ -265,8 +279,8 @@ public class DBInterface extends BaseDBInterface {
         String tableName = getTableName(clz);
         Database db = openWritableDatabase();
         Cursor cursor = null;
+        db.beginTransaction();
         try {
-            db.beginTransaction();
             String sql = "SELECT MIN(id) FROM " + tableName;
             cursor = rawQuery(db, sql);
             int lastId = -1;
@@ -360,7 +374,9 @@ public class DBInterface extends BaseDBInterface {
     public static <T extends Dto> int update(Database db, T dto, String id) {
         Class<? extends Dto> tClazz = dto.getClass();
         String tableName = getTableName(tClazz);
-        if (null == db) db = openWritableDatabase();
+        if (null == db) {
+            db = openWritableDatabase();
+        }
         if (isTableExist(db, tableName)) {
             try {
                 return update(db, tableName, getContentValues(dto), "id = ?", String.valueOf(id));
@@ -395,7 +411,9 @@ public class DBInterface extends BaseDBInterface {
     @SuppressWarnings("unchecked")
     public static <T extends Dto> T read(Database db, Class<T> clz, String id) {
         String tableName = getTableName(clz);
-        if (null == db) db = openReadableDatabase();
+        if (null == db) {
+            db = openReadableDatabase();
+        }
         if (isTableExist(tableName)) {
             Cursor cursor = null;
             try {
@@ -405,7 +423,7 @@ public class DBInterface extends BaseDBInterface {
                     HashMap<String, String> data = new HashMap<String, String>();
                     String[] names = cursor.getColumnNames();
                     for (String name : names) {
-                        data.put(name, cursor.getString(cursor.getColumnIndex(name)));
+                        data.put(name, CursorUtils.getString(cursor, name));
                     }
                     ret = getDtoFromTableData(clz, getColumnFields(clz), data);
                 }
@@ -420,7 +438,7 @@ public class DBInterface extends BaseDBInterface {
     private static <M> M getDtoFromTableData(Class<M> clz, Collection<Field> fields, HashMap<String, String> data) {
         M ret;
         try {
-            ret = clz.newInstance();
+            ret = ClazzUtil.newInstance(clz);
         } catch (Exception e) {
             String tableName = "", className = "";
             if (Dto.class.isAssignableFrom(clz)) {
@@ -779,7 +797,9 @@ public class DBInterface extends BaseDBInterface {
     public static boolean existByWhere(Database db, Class<? extends Dto> tClass, String where, String... params) {
         Cursor cursor = null;
         try {
-            if (null == db) db = openReadableDatabase();
+            if (null == db) {
+                db = openReadableDatabase();
+            }
             String tableName = getTableName(tClass);
             try {
                 cursor = rawQuery(db, "select 1 from " + tableName + " where " + where, params);
@@ -831,7 +851,9 @@ public class DBInterface extends BaseDBInterface {
                                                         Collection<Field> fields, String sql, String... params) {
         List<M> lists = new ArrayList<M>();
         String tableName = getTableName(tClass);
-        if (null == db) db = openReadableDatabase();
+        if (null == db) {
+            db = openReadableDatabase();
+        }
         if (isTableExist(db, tableName)) {
             Cursor cursor = null;
             try {
@@ -879,7 +901,7 @@ public class DBInterface extends BaseDBInterface {
                         val = DECIMAL_FORMAT.format(cursor.getFloat(index));
                     }
                 } else {
-                    val = cursor.getString(index);
+                    val = CursorUtils.getString(cursor, index);
                 }
                 data.put(name, val);
             }
@@ -934,7 +956,9 @@ public class DBInterface extends BaseDBInterface {
     public static int deleteByWhere(Database db, Class<? extends Dto> tClass, String where, Object... objects) {
         String tableName = getTableName(tClass);
         if (isTableExist(db, tableName)) {
-            if (null == db) db = openWritableDatabase();
+            if (null == db) {
+                db = openWritableDatabase();
+            }
             String sql = "delete from " + tableName + " where " + where;
             return execSQL(db, sql, objects);
         } else {
@@ -965,13 +989,17 @@ public class DBInterface extends BaseDBInterface {
 
     public static int cursorToNumber(Cursor cursor) {
         String s = cursorToString(cursor);
-        if ("".equals(s)) return 0;
+        if ("".equals(s)) {
+            return 0;
+        }
         return Integer.parseInt(s);
     }
 
     public static long cursorToLong(Cursor cursor) {
         String s = cursorToString(cursor);
-        if (null == s || "".equals(s) || "null".equals(s.trim())) return 0l;
+        if (null == s || "".equals(s) || "null".equals(s.trim())) {
+            return 0L;
+        }
         return Long.parseLong(s);
     }
 
@@ -1046,6 +1074,32 @@ public class DBInterface extends BaseDBInterface {
                 Class<Enum> typeClazz = (Class<Enum>) type;
                 return Enum.valueOf(typeClazz, val);
             }
+        } else if (DbList.class.isAssignableFrom(type)) {
+            if (null == val || val.length() == 0) {
+                return null;
+            }
+            Type genericType = field.getGenericType();
+            if (null != genericType && genericType instanceof ParameterizedType) {
+                ParameterizedType parameterizedType = (ParameterizedType) genericType;
+                Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
+                if (actualTypeArguments.length > 0) {
+                    return new DbList(actualTypeArguments[0], val);
+                }
+            }
+            throw new RuntimeException("DbList 没有确定的泛型类型<E>");
+        } else if (List.class.isAssignableFrom(type)) {
+            if (null == val || val.length() == 0) {
+                return null;
+            }
+            Type genericType = field.getGenericType();
+            if (null != genericType && genericType instanceof ParameterizedType) {
+                ParameterizedType parameterizedType = (ParameterizedType) genericType;
+                Type[] actualTypeArguments = parameterizedType.getActualTypeArguments();
+                if (actualTypeArguments.length > 0) {
+                    return gson.fromJson(val, com.flyhand.core.utils.TypeToken.getListType(actualTypeArguments[0]));
+                }
+            }
+            throw new RuntimeException("List 没有确定的泛型类型<E>");
         } else {
             throw new RuntimeException("can't support for type " + type.getName());
         }
@@ -1054,7 +1108,9 @@ public class DBInterface extends BaseDBInterface {
     public static void deleteTableIfExist(Database db, String tableName) {
         try {
             lock();
-            if (null == db) db = openWritableDatabase();
+            if (null == db) {
+                db = openWritableDatabase();
+            }
             execSQL(db, "DROP TABLE IF EXISTS " + tableName);
         } finally {
             unlock();
@@ -1066,4 +1122,31 @@ public class DBInterface extends BaseDBInterface {
     }
 
 
+    public static void foreachIds(Database db, Class<? extends Dto> dtoClazz, int count, ForeachCallback<List<String>> callback) {
+        if (!DBInterface.isTableExist(db, dtoClazz)) {
+            return;
+        }
+        String tableName = getTableName(dtoClazz);
+        Integer tableCount = DBInterface.readInteger(db, "select count(1) from " + tableName + " where 1=1");
+        if (tableCount <= 0) {
+            return;
+        }
+        float pageSizeF = tableCount / ((float) count);
+        int pageSize = (int) pageSizeF;
+        pageSize = pageSizeF == pageSize ? pageSize : pageSize + 1;
+        for (int i = 0; i < pageSize; i++) {
+            int offset = i * count;
+            Cursor cursor = null;
+            try {
+                cursor = DBInterface.rawQuery(db, "SELECT id FROM " + tableName + " WHERE 1=1 LIMIT " + count + " OFFSET " + offset);
+                List<String> ids = new ArrayList<>();
+                while (cursor.moveToNext()) {
+                    ids.add(cursor.getString(0));
+                }
+                callback.callback(db, ids);
+            } finally {
+                CursorUtils.close(cursor);
+            }
+        }
+    }
 }

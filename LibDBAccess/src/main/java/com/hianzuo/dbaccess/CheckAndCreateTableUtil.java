@@ -1,17 +1,18 @@
 package com.hianzuo.dbaccess;
 
 import android.content.Context;
-import dalvik.system.DexFile;
 
-import java.io.IOException;
+import com.flyhand.core.app.AbstractCoreApplication;
+import com.flyhand.core.utils.DexUtil;
+
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Enumeration;
 import java.util.List;
 
 /**
- * Created by Ryan on 14/12/25.
+ * @author Ryan
+ * @date 14/12/25.
  */
 public class CheckAndCreateTableUtil {
     public static void execute(Class<? extends Dto>... classes) {
@@ -19,15 +20,17 @@ public class CheckAndCreateTableUtil {
     }
 
     public static void execute(Database db, Class<? extends Dto>... classes) {
-        List<Class<? extends Dto>> list = new ArrayList<Class<? extends Dto>>();
+        List<Class<? extends Dto>> list = new ArrayList<>();
         Collections.addAll(list, classes);
         execute(db, list);
     }
 
     public static void execute(Database db, List<Class<? extends Dto>> classes) {
-        if (null == db) db = DBInterface.openWritableDatabase();
+        if (null == db) {
+            db = DBInterface.openWritableDatabase();
+        }
+        db.beginTransaction();
         try {
-            db.beginTransaction();
             for (Class<? extends Dto> aClass : classes) {
                 DBInterface.checkAndCreateTable(db, aClass);
             }
@@ -38,21 +41,20 @@ public class CheckAndCreateTableUtil {
     }
 
     public static void createAllInPackage(final Context context, Database db, final String pkg) {
-        __createAllInPackage(context, db, pkg);
+        createAllInPackageInternal(context, db, pkg);
     }
 
-    private static void __createAllInPackage(Context context, Database db, String pkg) {
+    private static void createAllInPackageInternal(Context context, Database db, String pkg) {
         try {
-            DexFile df = new DexFile(context.getPackageCodePath());
-            List<Class<? extends Dto>> list = new ArrayList<Class<? extends Dto>>();
+            List<String> allClasses = DexUtil.allClasses(context, AbstractCoreApplication.isDebugMode());
             ClassLoader classLoader = context.getClassLoader();
-            for (Enumeration<String> iterator = df.entries(); iterator.hasMoreElements(); ) {
-                String s = iterator.nextElement();
-                if (s.startsWith(pkg)) {
+            List<Class<? extends Dto>> list = new ArrayList<Class<? extends Dto>>();
+            for (String classStr : allClasses) {
+                if (classStr.startsWith(pkg)) {
                     Class<? extends Dto> c;
                     try {
                         //noinspection unchecked
-                        c = (Class<? extends Dto>) classLoader.loadClass(s);
+                        c = (Class<? extends Dto>) classLoader.loadClass(classStr);
                     } catch (Exception e) {
                         return;
                     }
@@ -62,9 +64,10 @@ public class CheckAndCreateTableUtil {
                         }
                     }
                 }
+
             }
             execute(db, list);
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }

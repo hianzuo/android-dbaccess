@@ -48,7 +48,9 @@ public class StringUtil {
             fos = new FileOutputStream(file);
             fos.write(detail.getBytes());
         } finally {
-            if (null != fos) fos.close();
+            if (null != fos) {
+                fos.close();
+            }
         }
     }
 
@@ -130,7 +132,9 @@ public class StringUtil {
     }
 
     public static String join(Object[] strings, String token) {
-        if(null == strings) return "";
+        if(null == strings) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
         for (Object string : strings) {
             sb.append(string.toString()).append(token);

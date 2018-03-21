@@ -1,13 +1,12 @@
 package com.hianzuo.dbaccess.simple;
 
 import android.content.Context;
-import android.os.Environment;
 
+import com.flyhand.core.utils.SDCardUtil;
 import com.hianzuo.dbaccess.CheckAndCreateTableUtil;
 import com.hianzuo.dbaccess.Database;
 import com.hianzuo.dbaccess.config.DBConfig;
 import com.hianzuo.dbaccess.config.UpdateTableMethod;
-import com.hianzuo.dbaccess.util.SDCardUtil;
 
 import java.io.File;
 

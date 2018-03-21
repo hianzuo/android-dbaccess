@@ -1,5 +1,7 @@
 package com.hianzuo.dbaccess.sql.builder;
 
+import com.hianzuo.dbaccess.util.StringUtil;
+
 /**
  * Created by Ryan on 14/11/19.
  */
@@ -33,7 +35,9 @@ public class SQLBuilder {
     }
 
     private WhereBuilder getWhereBuilder() {
-        if (null == whereBuilder) whereBuilder = new WhereBuilder();
+        if (null == whereBuilder) {
+            whereBuilder = new WhereBuilder();
+        }
         return whereBuilder;
     }
 
@@ -84,7 +88,9 @@ public class SQLBuilder {
     }
 
     public SQLBuilder addSelect(String str) {
-        if (isEmpty(str)) return this;
+        if (isEmpty(str)) {
+            return this;
+        }
         if (isEmpty(this.selected)) {
             setSelect(str);
         } else {
@@ -149,27 +155,85 @@ public class SQLBuilder {
         }
     }
 
+    public static class SQL {
+        String sql;
+        String[] params;
+
+        public SQL(String sql, String[] params) {
+            this.sql = sql;
+            this.params = params;
+        }
+
+        public String getSql() {
+            return sql;
+        }
+
+        public String[] getParams() {
+            return params;
+        }
+
+        @Override
+        public String toString() {
+            return sql;
+        }
+    }
+
     public static class KVItem {
         String name;
         String operator;
-        Object value;
+        String value;
 
         public KVItem(String name) {
             this.name = name;
         }
 
-        public KVItem(String name, Object value) {
+        public KVItem(String name, String value) {
             this(name, null, value);
         }
 
-        public KVItem(String name, String operator, Object value) {
+        public KVItem(String name, Object value) {
+            this(name, null, value.toString());
+        }
+        public KVItem(String name, String operator, String value) {
             this.name = name;
             this.operator = operator;
             this.value = value;
         }
 
-        public KVItem copy(String prefix) {
-            return new KVItem(prefix + "." + name, operator, value);
+        public KVItem(String name, String operator, Object value) {
+            this(name, operator, value.toString());
+        }
+
+        public KVItem copy(String alias) {
+            alias = StringUtil.isEmpty(alias) ? "" : (alias.endsWith(".") ? alias : alias + ".");
+            return new KVItem(alias + name, operator, value);
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public String sql() {
+            StringBuilder sb = new StringBuilder("");
+            sb.append(name);
+            sb.append(SQLBuilder.KG);
+            if (null != value) {
+                if (SQLBuilder.isEmpty(operator)) {
+                    sb.append(SQLBuilder.EQ);
+                } else {
+                    sb.append(operator);
+                }
+                sb.append(SQLBuilder.KG);
+                sb.append(SQLBuilder.QU_MARK)
+                        .append(SQLBuilder.KG)
+                        .append(SQLBuilder.AND)
+                        .append(SQLBuilder.KG)
+                ;
+            } else {
+                sb.append(SQLBuilder.AND)
+                        .append(SQLBuilder.KG);
+            }
+            return sb.toString();
         }
     }
 

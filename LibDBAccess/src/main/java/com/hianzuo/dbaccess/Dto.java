@@ -4,9 +4,11 @@ import com.hianzuo.dbaccess.inject.Column;
 import com.hianzuo.dbaccess.inject.Table;
 import com.hianzuo.dbaccess.throwable.DBRuntimeException;
 import com.hianzuo.dbaccess.util.ClassFieldUtil;
+import com.flyhand.core.utils.ClazzUtil;
 
 import java.io.Serializable;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.List;
 
 /**
@@ -15,9 +17,11 @@ import java.util.List;
  * Time: 下午12:20
  */
 @Table(ver = 3)
-public abstract class Dto implements Serializable, Cloneable {
-    @Column(id = -1, aicr = true, pk = true) public Integer id;
-    @Column(id = -2, len = 32) public String status = Status.NEW.toString();
+public abstract class Dto extends ExtendField implements Serializable, Cloneable {
+    @Column(id = -1, aicr = true, pk = true)
+    public Integer id;
+    @Column(id = -2, len = 32)
+    public String status = Status.NEW.toString();
 
     public Dto() {
     }
@@ -143,17 +147,18 @@ public abstract class Dto implements Serializable, Cloneable {
     }
 
     public static <T extends Dto> T createNullFieldDto(Class<T> clz) {
-        T t = null;
-        try {
-            t = clz.newInstance();
-        } catch (Exception e) {
-            throw new DBRuntimeException(e);
-        }
+        T t = ClazzUtil.newInstance(clz);
         List<Field> fields = DBInterface.getColumnFields(clz);
         for (Field field : fields) {
             try {
-                field.setAccessible(true);
-                field.set(t, null);
+                boolean isStatic = Modifier.isStatic(field.getModifiers());
+                boolean isFinal = Modifier.isFinal(field.getModifiers());
+                boolean isShadow$ = field.getName().startsWith("shadow$");
+                if (isFinal || isStatic || isShadow$) {
+                } else {
+                    field.setAccessible(true);
+                    field.set(t, null);
+                }
             } catch (Exception e) {
                 throw new DBRuntimeException(e);
             }

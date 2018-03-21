@@ -6,14 +6,13 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
 import android.os.Build;
-import android.util.Log;
 
+import com.flyhand.core.app.AbstractCoreApplication;
 import com.hianzuo.dbaccess.config.DBHelper;
 import com.hianzuo.dbaccess.inject.Column;
 import com.hianzuo.dbaccess.inject.Table;
+import com.hianzuo.dbaccess.lang.DbList;
 import com.hianzuo.dbaccess.sql.SQLiteDeleteSQLHandler;
-import com.hianzuo.dbaccess.sql.SQLiteInsertSQLHandler;
-import com.hianzuo.dbaccess.sql.SQLiteUpdateSQLHandler;
 import com.hianzuo.dbaccess.sql.builder.SQLBuilder;
 import com.hianzuo.dbaccess.sql.builder.WhereBuilder;
 import com.hianzuo.dbaccess.store.DBTable;
@@ -24,12 +23,19 @@ import com.hianzuo.dbaccess.throwable.DBRuntimeException;
 import com.hianzuo.dbaccess.throwable.DBSqlException;
 import com.hianzuo.dbaccess.util.ContentValues2xUtil;
 import com.hianzuo.dbaccess.util.CursorUtils;
+import com.hianzuo.dbaccess.util.SQLMapResult;
 import com.hianzuo.dbaccess.util.StringUtil;
+import com.google.gson.Gson;
+import com.hianzuo.logger.Log;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -59,16 +65,21 @@ class BaseDBInterface {
 
     public static synchronized Database openWritableDatabase() {
         DBHelper helper = getDatabaseHelper();
-        return openWritableDatabase(helper);
+        return openDatabase(helper, true);
     }
 
     public static synchronized Database openReadableDatabase() {
-        return openWritableDatabase();
+        DBHelper helper = getDatabaseHelper();
+        return openDatabase(helper, false);
     }
 
-    public static Database openWritableDatabase(DBHelper helper) {
+    public static synchronized Database openWritableDatabase(DBHelper helper) {
+        return openDatabase(helper, true);
+    }
+
+    private static Database openDatabase(DBHelper helper, boolean canWrite) {
         try {
-            return new Database(helper.getWritableDatabase());
+            return new Database(canWrite ? helper.getWritableDatabase() : helper.getReadableDatabase());
         } catch (SQLiteException ex) {
             String msg = ex.getMessage();
             helper.close();
@@ -76,7 +87,7 @@ class BaseDBInterface {
             if (null != msg && msg.contains("downgrade database from version")) {
                 Integer dbVersion = Integer.valueOf(msg.replaceAll("^.*?from version(.*?)to.*$", "$1").trim());
                 BaseDBInterface.mDBHelper = new DBHelper(dbVersion);
-                return new Database(getDatabaseHelper().getWritableDatabase());
+                return new Database(canWrite ? getDatabaseHelper().getWritableDatabase() : getDatabaseHelper().getReadableDatabase());
             } else {
                 ex.printStackTrace();
                 throw ex;
@@ -116,6 +127,10 @@ class BaseDBInterface {
         return isTableExist(getTableName(clz));
     }
 
+    public static boolean isTableExist(Database db, Class<? extends Dto> clz) {
+        return isTableExist(db, getTableName(clz));
+    }
+
     private static final Map<String, Boolean> mCacheTableExist = new ConcurrentHashMap<String, Boolean>();
 
     public static boolean isTableExist(String tableName) {
@@ -135,12 +150,12 @@ class BaseDBInterface {
     public static void deleteAllTable() {
         Database db = DBInterface.openWritableDatabase();
         Cursor c = null;
+        db.beginTransaction();
         try {
-            db.beginTransaction();
             c = rawQuery(db, "SELECT name FROM sqlite_master WHERE type='table'");
             while (c.moveToNext()) {
                 String s = c.getString(0);
-                if (s.equals("sqlite_sequence") || s.equals("android_metadata")) {
+                if ("sqlite_sequence".equals(s) || "android_metadata".equals(s)) {
                     continue;
                 } else {
                     DBInterface.deleteTableIfExist(db, s);
@@ -149,7 +164,9 @@ class BaseDBInterface {
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
-            if (null != c) c.close();
+            if (null != c) {
+                c.close();
+            }
         }
 
         DBInterface.clearCacheTableExist();
@@ -162,27 +179,20 @@ class BaseDBInterface {
         if (null != result && result) {
             return true;
         } else {
-            result = false;
             Cursor cursor = null;
             try {
-                String sql = "select count(1) as c from sqlite_master where type ='table' and name ='" + tableName.trim() + "' ";
-                cursor = rawQuery(db, sql);
-                if (cursor.moveToNext()) {
-                    int count = cursor.getInt(0);
-                    if (count > 0) {
-                        result = true;
-                    }
+                cursor = rawQuery(db, "PRAGMA table_info('" + tableName + "')");
+                if (cursor.moveToFirst()) {
+                    Log.e("BaseDBInterface", AbstractCoreApplication.progressName() + " TABLE[" + tableName + "] existed.");
+                    mCacheTableExist.put(tableName, true);
+                    return true;
+                } else {
+                    Log.e("BaseDBInterface", AbstractCoreApplication.progressName() + " TABLE[" + tableName + "] not existed.");
+                    return false;
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new DBRuntimeException("call isTableExist method exception tableName [" + tableName + "]", e);
             } finally {
                 CursorUtils.close(cursor);
             }
-            if (result) {
-                mCacheTableExist.put(tableName, true);
-            }
-            return result;
         }
     }
 
@@ -202,14 +212,9 @@ class BaseDBInterface {
     }
 
     public static <T extends Dto> void checkAndCreateTable(Database db, Class<T> clazz) {
-        try {
-            mLock.lock();
-            String tableName = getTableName(clazz);
-            if (!isTableExist(db, tableName)) {
-                createTable(db, clazz);
-            }
-        } finally {
-            mLock.unlock();
+        String tableName = getTableName(clazz);
+        if (!isTableExist(db, tableName)) {
+            createTable(db, clazz);
         }
     }
 
@@ -225,9 +230,10 @@ class BaseDBInterface {
             db = openWritableDatabase();
         }
         String tableName = "";
+        if (inTransaction) {
+            db.beginTransaction();
+        }
         try {
-            mLock.lock();
-            if (inTransaction) db.beginTransaction();
             tableName = getTableName(tClass);
             DBTable table = getSQLiteTable(tClass);
             if (null == table) {
@@ -254,7 +260,9 @@ class BaseDBInterface {
                 }
                 table.saveOrUpdateColumnList(db, id);
             }
-            if (inTransaction) db.setTransactionSuccessful();
+            if (inTransaction) {
+                db.setTransactionSuccessful();
+            }
         } catch (Exception e) {
             if (e instanceof SQLiteException) {
                 if (null != e.getMessage() && e.getMessage().contains("already exists")) {
@@ -263,8 +271,9 @@ class BaseDBInterface {
             }
             throw new DBRuntimeException("can not create table[" + tableName + "]", e);
         } finally {
-            if (inTransaction) db.endTransaction();
-            mLock.unlock();
+            if (inTransaction) {
+                db.endTransaction();
+            }
         }
     }
 
@@ -288,26 +297,44 @@ class BaseDBInterface {
 
 
     public static String getTableName(Class<? extends Dto> clz) {
-        try {
-            mLock.lock();
-            String tableName = mCacheTableNames.get(clz);
-            if (null == tableName) {
-                try {
-                    Table injectTable = clz.getAnnotation(Table.class);
-                    tableName = injectTable.name();
-                    if (null == tableName || tableName.trim().length() == 0) {
-                        tableName = clz.getSimpleName();
-                    }
-                    mCacheTableNames.put(clz, tableName);
-                    return tableName;
-                } catch (Exception e) {
-                    throw new RuntimeException(e.getMessage());
+        String tableName = mCacheTableNames.get(clz);
+        if (null == tableName) {
+            try {
+                Table injectTable = clz.getAnnotation(Table.class);
+                tableName = injectTable.name();
+                if (tableName.trim().length() == 0) {
+                    tableName = clz.getSimpleName();
                 }
-            } else {
+                mCacheTableNames.put(clz, tableName);
                 return tableName;
+            } catch (Exception e) {
+                throw new RuntimeException(e.getMessage());
             }
+        } else {
+            return tableName;
+        }
+    }
+
+    public static Long readLong(String sql, String... params) {
+        return readLong(null, sql, params);
+    }
+
+    public static Long readLong(Database db, String sql, String... params) {
+        Cursor c = null;
+        try {
+            if (null == db) {
+                db = openReadableDatabase();
+            }
+            c = rawQuery(db, sql, params);
+            Long ret = 0L;
+            if (c.moveToNext()) {
+                ret = c.getLong(0);
+            }
+            return ret;
+        } catch (Exception e) {
+            throw new DBSqlException(sql, e, params);
         } finally {
-            mLock.unlock();
+            CursorUtils.close(c);
         }
     }
 
@@ -322,11 +349,32 @@ class BaseDBInterface {
     public static Integer readInteger(Database db, String sql, String... params) {
         Cursor c = null;
         try {
-            if (null == db) db = openReadableDatabase();
+            if (null == db) {
+                db = openReadableDatabase();
+            }
             c = rawQuery(db, sql, params);
             Integer ret = 0;
             if (c.moveToNext()) {
                 ret = c.getInt(0);
+            }
+            return ret;
+        } catch (Exception e) {
+            throw new DBSqlException(sql, e, params);
+        } finally {
+            CursorUtils.close(c);
+        }
+    }
+
+    public static Double readDouble(Database db, String sql, String... params) {
+        Cursor c = null;
+        try {
+            if (null == db) {
+                db = openReadableDatabase();
+            }
+            c = rawQuery(db, sql, params);
+            Double ret = 0D;
+            if (c.moveToNext()) {
+                ret = c.getDouble(0);
             }
             return ret;
         } catch (Exception e) {
@@ -343,14 +391,69 @@ class BaseDBInterface {
     public static String readString(Database db, String sql, String... params) {
         Cursor c = null;
         try {
-            if (null == db) db = openReadableDatabase();
+            if (null == db) {
+                db = openReadableDatabase();
+            }
             c = rawQuery(db, sql, params);
             Object ret = null;
             if (c.moveToNext()) {
+
                 ret = c.getString(0);
-                if (null == ret) ret = c.getInt(0);
+                if (null == ret) {
+                    ret = c.getInt(0);
+                }
             }
             return null != ret ? ret + "" : null;
+        } catch (Exception e) {
+            throw new DBSqlException(sql, e, params);
+        } finally {
+            CursorUtils.close(c);
+        }
+    }
+
+    public static List<String> readListString(String sql, String... params) {
+        return readListString(null, sql, params);
+    }
+
+    public static List<String> readListString(Database db, String sql, String... params) {
+        Cursor c = null;
+        List<String> list = new ArrayList<>();
+        try {
+            if (null == db) {
+                db = openReadableDatabase();
+            }
+            c = rawQuery(db, sql, params);
+            while (c.moveToNext()) {
+                String val = CursorUtils.getString(c, 0);
+                if (null != val) {
+                    list.add(val);
+                }
+            }
+            return list;
+        } catch (Exception e) {
+            throw new DBSqlException(sql, e, params);
+        } finally {
+            CursorUtils.close(c);
+        }
+    }
+
+    public static SQLMapResult readMapResult(String sql, String... params) {
+        return readMapResult(null, sql, params);
+    }
+
+    public static SQLMapResult readMapResult(Database db, String sql, String... params) {
+        Cursor c = null;
+        try {
+            if (null == db) {
+                db = openReadableDatabase();
+            }
+            c = rawQuery(db, sql, params);
+            Map<String, Object> data = new HashMap<>();
+            String[] names = c.getColumnNames();
+            for (String name : names) {
+                data.put(name, CursorUtils.get(c, c.getColumnIndex(name)));
+            }
+            return new SQLMapResult(data);
         } catch (Exception e) {
             throw new DBSqlException(sql, e, params);
         } finally {
@@ -374,10 +477,10 @@ class BaseDBInterface {
     }
 
     public static int execSQL(Database db, String sql, Object... params) {
-        if (null == db) db = openWritableDatabase();
+        if (null == db) {
+            db = openWritableDatabase();
+        }
         try {
-            mLock.lock();
-            printSQL(sql);
             SQLiteStatement statement = db.compileStatement(sql);
             for (int i = 0; i < params.length; i++) {
                 Object param = params[i];
@@ -412,14 +515,6 @@ class BaseDBInterface {
             }
         } catch (Exception e) {
             throw new DBSqlException(sql, e, params);
-        } finally {
-            mLock.unlock();
-        }
-    }
-
-    private static void printSQL(String sql) {
-        if (DBHelper.getDBConfig().isPrintSQL()) {
-            Log.e("DB_SQL", sql);
         }
     }
 
@@ -440,8 +535,9 @@ class BaseDBInterface {
     }
 
     private static Cursor rawQuery(Database db, String sql, int tryCount, String... params) {
-        if (null == db) db = openReadableDatabase();
-        printSQL(sql);
+        if (null == db) {
+            db = openReadableDatabase();
+        }
         long currentTime = System.currentTimeMillis();
         try {
             return db.rawQuery(sql, params);
@@ -456,8 +552,8 @@ class BaseDBInterface {
             throw ex;
         } finally {
             long speedTime = System.currentTimeMillis() - currentTime;
-            if (speedTime > 5000) {
-                Log.e("Slowly SQL", "Speed time[" + speedTime + "]:" + sql + " ; params:" + StringUtil.join(params, ","));
+            if (speedTime > 3000) {
+                Log.w("Slowly SQL", "Speed time[" + speedTime + "]:" + sql + " ; params:" + StringUtil.join(params, ","));
             }
         }
     }
@@ -469,26 +565,20 @@ class BaseDBInterface {
 
     private static int update(Database db, String table, ContentValues values,
                               String whereClause, int tryCount, String... whereArgs) {
-        if (DBHelper.getDBConfig().isPrintSQL()) {
-            printSQL(SQLiteUpdateSQLHandler.create(table, values, whereClause));
+        if (null == db) {
+            db = openWritableDatabase();
         }
         try {
-            mLock.lock();
-            if (null == db) db = openWritableDatabase();
-            try {
-                return db.update(table, values, whereClause, whereArgs);
-            } catch (RuntimeException ex) {
-                String eMsg = ex.getMessage();
-                if (null != eMsg && eMsg.contains("has no column named")) {
-                    getDatabaseHelper().checkAndUpdateDBTableStructure(db);
-                    if (tryCount > 0) {
-                        return update(db, table, values, whereClause, tryCount - 1, whereArgs);
-                    }
+            return db.update(table, values, whereClause, whereArgs);
+        } catch (RuntimeException ex) {
+            String eMsg = ex.getMessage();
+            if (null != eMsg && eMsg.contains("has no column named")) {
+                getDatabaseHelper().checkAndUpdateDBTableStructure(db);
+                if (tryCount > 0) {
+                    return update(db, table, values, whereClause, tryCount - 1, whereArgs);
                 }
-                throw ex;
             }
-        } finally {
-            mLock.unlock();
+            throw ex;
         }
     }
 
@@ -500,18 +590,14 @@ class BaseDBInterface {
 
     protected static int delete(Database db, String table,
                                 String whereClause, String... whereArgs) {
-        if (DBHelper.getDBConfig().isPrintSQL()) {
-            printSQL(SQLiteDeleteSQLHandler.create(table, whereClause));
+        if (null == db) {
+            db = openWritableDatabase();
         }
-        if (null == db) db = openWritableDatabase();
         try {
-            mLock.lock();
             return db.delete(table, whereClause, whereArgs);
         } catch (Exception e) {
             String sql = SQLiteDeleteSQLHandler.create(table, whereClause);
             throw new DBSqlException(sql, e, whereArgs);
-        } finally {
-            mLock.unlock();
         }
     }
 
@@ -521,12 +607,10 @@ class BaseDBInterface {
     }
 
     private static long insert(Database db, String table, String nullColumnHack, ContentValues values, int tryCount) {
-        if (DBHelper.getDBConfig().isPrintSQL()) {
-            printSQL(SQLiteInsertSQLHandler.create(table, nullColumnHack, values));
+        if (null == db) {
+            db = openWritableDatabase();
         }
-        if (null == db) db = openWritableDatabase();
         try {
-            mLock.lock();
             return db.insert(table, nullColumnHack, values);
         } catch (Exception ex) {
             String eMsg = ex.getMessage();
@@ -537,8 +621,6 @@ class BaseDBInterface {
                 }
             }
             throw ex;
-        } finally {
-            mLock.unlock();
         }
     }
 
@@ -647,10 +729,13 @@ class BaseDBInterface {
             Class<? extends Dto> tClass = list.get(0).getClass();
             checkAndCreateTable(db, tClass);
             String tableName = getTableName(tClass);
-            if (null == db) db = openWritableDatabase();
+            if (null == db) {
+                db = openWritableDatabase();
+            }
+            if (inTransaction) {
+                db.beginTransaction();
+            }
             try {
-                mLock.lock();
-                if (inTransaction) db.beginTransaction();
                 String sql = null;
                 int sqlWSize = 0;
                 Object[] bindArgs = null;
@@ -668,10 +753,13 @@ class BaseDBInterface {
                         throw new DBSqlException(sql, e, bindArgs);
                     }
                 }
-                if (inTransaction) db.setTransactionSuccessful();
+                if (inTransaction) {
+                    db.setTransactionSuccessful();
+                }
             } finally {
-                if (inTransaction) db.endTransaction();
-                mLock.unlock();
+                if (inTransaction) {
+                    db.endTransaction();
+                }
             }
         }
         return retList;
@@ -712,9 +800,10 @@ class BaseDBInterface {
                 inTransaction = true;
                 db = openWritableDatabase();
             }
+            if (inTransaction) {
+                db.beginTransaction();
+            }
             try {
-                mLock.lock();
-                if (inTransaction) db.beginTransaction();
                 int i = 0;
                 for (T dto : list) {
                     ContentValues initialValues = getContentValues(dto);
@@ -751,10 +840,13 @@ class BaseDBInterface {
                         Log.i(dbName, sql);
                     }
                 }
-                if (inTransaction) db.setTransactionSuccessful();
+                if (inTransaction) {
+                    db.setTransactionSuccessful();
+                }
             } finally {
-                if (inTransaction) db.endTransaction();
-                mLock.unlock();
+                if (inTransaction) {
+                    db.endTransaction();
+                }
             }
         }
         return ret;
@@ -815,6 +907,8 @@ class BaseDBInterface {
         return getContentValues(dto, true);
     }
 
+    protected static final Gson gson = new Gson();
+
     public static <T extends Dto> ContentValues getContentValues(T dto, Boolean includeNullValue) {
         List<Field> fields = getColumnFields(dto.getClass());
         ContentValues cvs = new ContentValues();
@@ -847,7 +941,9 @@ class BaseDBInterface {
                         cvs.put(columnName, (Long) value);
                     } else if (Boolean.class.equals(type) || "boolean".equals(type.getName())) {
                         String val = null;
-                        if (null != value) val = value.toString();
+                        if (null != value) {
+                            val = value.toString();
+                        }
                         cvs.put(columnName, val);
                     } else if (Double.class.equals(type) || "double".equals(type.getName())) {
                         cvs.put(columnName, (Double) value);
@@ -855,20 +951,35 @@ class BaseDBInterface {
                         cvs.put(columnName, (Float) value);
                     } else if (BigDecimal.class.equals(type)) {
                         String val = null;
-                        if (null != value) val = value.toString();
+                        if (null != value) {
+                            val = value.toString();
+                        }
                         cvs.put(columnName, val);
                     } else if (BigInteger.class.equals(type)) {
                         String val = null;
-                        if (null != value) val = value.toString();
+                        if (null != value) {
+                            val = value.toString();
+                        }
                         cvs.put(columnName, val);
                     } else if (Enum.class.isAssignableFrom(type)) {
                         Enum e = null;
-                        if (null != value) e = (Enum) value;
+                        if (null != value) {
+                            e = (Enum) value;
+                        }
+                        String columnValue = null;
                         if (null != e) {
-                            cvs.put(columnName, e.name());
-                        } else {
-                            String nullE = null;
-                            cvs.put(columnName, nullE);
+                            columnValue = e.name();
+                        }
+                        cvs.put(columnName, columnValue);
+                    } else if (DbList.class.isAssignableFrom(type)) {
+                        String columnValue = null;
+                        if (null != value) {
+                            columnValue = ((DbList) value).getDataStr();
+                        }
+                        cvs.put(columnName, columnValue);
+                    } else if (List.class.isAssignableFrom(type)) {
+                        if (null != value) {
+                            cvs.put(columnName, gson.toJson(value));
                         }
                     } else {
                         throw new RuntimeException("can't support for type " + type.getName());
@@ -912,35 +1023,30 @@ class BaseDBInterface {
      * @return 保存的参数
      */
     public static String createInsertSQL(ContentValues cvs, String tableName) {
-        try {
-            mLock.lock();
-            StringBuilder sql = new StringBuilder();
-            sql.append("INSERT");
-            sql.append(" INTO ");
-            sql.append(tableName);
-            sql.append('(');
+        StringBuilder sql = new StringBuilder();
+        sql.append("INSERT");
+        sql.append(" INTO ");
+        sql.append(tableName);
+        sql.append('(');
 
-            int size = (cvs != null && cvs.size() > 0) ? cvs.size() : 0;
-            if (size > 0) {
-                int i = 0;
-                for (Map.Entry<String, Object> entry : cvs.valueSet()) {
-                    sql.append((i > 0) ? "," : "");
-                    sql.append(entry.getKey());
-                    i++;
-                }
-                sql.append(')');
-                sql.append(" VALUES (");
-                for (i = 0; i < size; i++) {
-                    sql.append((i > 0) ? ",?" : "?");
-                }
-            } else {
-                sql.append(") VALUES (NULL");
+        int size = (cvs != null && cvs.size() > 0) ? cvs.size() : 0;
+        if (size > 0) {
+            int i = 0;
+            for (Map.Entry<String, Object> entry : cvs.valueSet()) {
+                sql.append((i > 0) ? "," : "");
+                sql.append(entry.getKey());
+                i++;
             }
             sql.append(')');
-            return sql.toString();
-        } finally {
-            mLock.unlock();
+            sql.append(" VALUES (");
+            for (i = 0; i < size; i++) {
+                sql.append((i > 0) ? ",?" : "?");
+            }
+        } else {
+            sql.append(") VALUES (NULL");
         }
+        sql.append(')');
+        return sql.toString();
     }
 
     public static String insertWithOnConflictSQL(String table, String nullColumnHack,
@@ -976,7 +1082,9 @@ class BaseDBInterface {
     }
 
     public static void dropTable(Database db, Class<? extends Dto> clazz) {
-        if (null == db) db = openWritableDatabase();
+        if (null == db) {
+            db = openWritableDatabase();
+        }
         String tid = DBInterface.readString(db, "select id from app_table_list where className=?", clazz.getName());
         if (null != tid) {
             DBInterface.deleteByWhere(db, SQLiteTableColumn.class, "tid=?", tid);

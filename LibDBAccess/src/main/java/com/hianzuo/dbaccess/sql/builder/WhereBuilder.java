@@ -13,7 +13,9 @@ public class WhereBuilder implements Cloneable {
     private List<SQLBuilder.SQLItem> afterItemList;
 
     public WhereBuilder addWhere(SQLBuilder.KVItem... items) {
-        if (null == items) return this;
+        if (null == items) {
+            return this;
+        }
         for (SQLBuilder.KVItem item : items) {
             if (item instanceof SQLBuilder.KVListItem) {
                 addWhereIn((SQLBuilder.KVListItem) item);
@@ -25,7 +27,9 @@ public class WhereBuilder implements Cloneable {
     }
 
     public WhereBuilder addWhere(List<SQLBuilder.KVItem> items) {
-        if (null == items) return this;
+        if (null == items) {
+            return this;
+        }
         for (SQLBuilder.KVItem item : items) {
             addWhere(item);
         }
@@ -33,8 +37,12 @@ public class WhereBuilder implements Cloneable {
     }
 
     public WhereBuilder addWhere(SQLBuilder.KVItem item) {
-        if (null == item) return this;
-        if (null == whereList) whereList = new ArrayList<>();
+        if (null == item) {
+            return this;
+        }
+        if (null == whereList) {
+            whereList = new ArrayList<>();
+        }
         whereList.add(item);
         return this;
     }
@@ -59,7 +67,9 @@ public class WhereBuilder implements Cloneable {
     }
 
     public WhereBuilder addWhereIn(SQLBuilder.KVListItem item) {
-        if (null == whereInList) whereInList = new ArrayList<SQLBuilder.KVListItem>();
+        if (null == whereInList) {
+            whereInList = new ArrayList<SQLBuilder.KVListItem>();
+        }
         whereInList.add(item);
         return this;
     }
@@ -70,13 +80,17 @@ public class WhereBuilder implements Cloneable {
     }
 
     public WhereBuilder before(String sql, Object... args) {
-        if (null == beforeItemList) beforeItemList = new ArrayList<SQLBuilder.SQLItem>();
+        if (null == beforeItemList) {
+            beforeItemList = new ArrayList<SQLBuilder.SQLItem>();
+        }
         beforeItemList.add(new SQLBuilder.SQLItem(sql, args));
         return this;
     }
 
     public WhereBuilder after(String sql, Object... args) {
-        if (null == afterItemList) afterItemList = new ArrayList<SQLBuilder.SQLItem>();
+        if (null == afterItemList) {
+            afterItemList = new ArrayList<SQLBuilder.SQLItem>();
+        }
         afterItemList.add(new SQLBuilder.SQLItem(sql, args));
         return this;
     }
@@ -90,25 +104,7 @@ public class WhereBuilder implements Cloneable {
         }
         if (null != whereList && !whereList.isEmpty()) {
             for (SQLBuilder.KVItem item : whereList) {
-                sb.append(item.name);
-                sb.append(SQLBuilder.KG);
-                if (null != item.value) {
-                    if (SQLBuilder.isEmpty(item.operator)) {
-                        sb.append(SQLBuilder.EQ);
-                    } else {
-                        sb.append(item.operator);
-                    }
-                    sb.append(SQLBuilder.KG);
-                    sb.append(SQLBuilder.QU_MARK)
-                            .append(SQLBuilder.KG)
-                            .append(SQLBuilder.AND)
-                            .append(SQLBuilder.KG)
-                    ;
-                } else {
-                    sb.append(SQLBuilder.AND)
-                            .append(SQLBuilder.KG)
-                    ;
-                }
+                 sb.append(item.sql());
             }
         }
         if (null != whereInList && !whereInList.isEmpty()) {
@@ -153,10 +149,18 @@ public class WhereBuilder implements Cloneable {
                 whereInParams.length + afterItemParams.length;
         String[] params = new String[allLen];
         int i = 0;
-        for (String param : beforeItemParams) params[i++] = param;
-        for (String param : whereParams) params[i++] = param;
-        for (String param : whereInParams) params[i++] = param;
-        for (String param : afterItemParams) params[i++] = param;
+        for (String param : beforeItemParams) {
+            params[i++] = param;
+        }
+        for (String param : whereParams) {
+            params[i++] = param;
+        }
+        for (String param : whereInParams) {
+            params[i++] = param;
+        }
+        for (String param : afterItemParams) {
+            params[i++] = param;
+        }
         return params;
     }
 

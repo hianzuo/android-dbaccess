@@ -30,6 +30,7 @@ public class SQLiteTable extends Dto implements DBTable {
     private HashMap<Float, SQLiteTableColumn> map;
     private String createTableSQL;
 
+    @Override
     public SQLiteTable create(String className, int ver, boolean clearOnAddColumn) {
         this.className = className;
         this.ver = ver;
@@ -38,7 +39,9 @@ public class SQLiteTable extends Dto implements DBTable {
     }
     public void parseFields(List<Field> fields) {
         List<SQLiteTableColumn> list = this.list;
-        if (list.size() > 0) return;
+        if (list.size() > 0) {
+            return;
+        }
         for (Field field : fields) {
             Column column = getAnnotationColumn(field);
             if (null != column) {
@@ -52,7 +55,9 @@ public class SQLiteTable extends Dto implements DBTable {
                 String check = column.check();
                 String def = column.def();
                 String type = column.type();
-                if (name.length() == 0) name = field.getName();
+                if (name.length() == 0) {
+                    name = field.getName();
+                }
                 Class<?> fieldClass = field.getType();
                 SQLiteTableColumn stc = new SQLiteTableColumn()
                         .update(cid, name, type, len, pk, aicr, canull, unique,
@@ -62,8 +67,11 @@ public class SQLiteTable extends Dto implements DBTable {
         }
     }
 
+    @Override
     public String getSigner() {
-        if (null != signer) return signer;
+        if (null != signer) {
+            return signer;
+        }
         List<SQLiteTableColumn> list = this.list;
         StringBuilder sb = new StringBuilder();
         for (SQLiteTableColumn column : list) {
@@ -89,7 +97,9 @@ public class SQLiteTable extends Dto implements DBTable {
     }
 
     private void initMap(List<SQLiteTableColumn> list) {
-        if (null == list) return;
+        if (null == list) {
+            return;
+        }
         HashMap<Float, SQLiteTableColumn> map = new HashMap<Float, SQLiteTableColumn>();
         for (SQLiteTableColumn sct : list) {
             Float cid = sct.getCid();
@@ -113,6 +123,7 @@ public class SQLiteTable extends Dto implements DBTable {
         }
     }
 
+    @Override
     public String getClassName() {
         return className;
     }
@@ -161,8 +172,11 @@ public class SQLiteTable extends Dto implements DBTable {
         }
     }
 
+    @Override
     public String makeCreateSQLFromColumns(String tableName, List<Field> fields) {
-        if (null != createTableSQL) return createTableSQL;
+        if (null != createTableSQL) {
+            return createTableSQL;
+        }
         parseFields(fields);
         List<String> columns = new ArrayList<String>();
         for (SQLiteTableColumn column : list) {
@@ -224,7 +238,7 @@ public class SQLiteTable extends Dto implements DBTable {
         for (SQLiteTableColumn newCol : columns) {
             SQLiteTableColumn column = getColumn(newCol.getCid());
             if (null == column) {
-                throw new DBRuntimeException("can not get old column ,the cid is " + newCol.getCid());
+                throw new DBRuntimeException("can not getListType old column ,the cid is " + newCol.getCid());
             }
             column.copyFrom(newCol);
         }
@@ -233,6 +247,7 @@ public class SQLiteTable extends Dto implements DBTable {
         }
     }
 
+    @Override
     public void saveOrUpdateColumnList(Database db, int tid) {
         updateColumnListTableId(tid);
         DBInterface.deleteByWhere(db, SQLiteTableColumn.class, "tid=?", String.valueOf(tid));

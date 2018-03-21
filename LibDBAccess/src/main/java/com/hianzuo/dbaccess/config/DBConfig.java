@@ -2,10 +2,12 @@ package com.hianzuo.dbaccess.config;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+
 import com.hianzuo.dbaccess.Database;
 import com.hianzuo.dbaccess.controller.DtoControllerCreator;
 import com.hianzuo.dbaccess.store.DBTable;
 import com.hianzuo.dbaccess.store.SQLiteTable;
+import com.flyhand.yunpos.utils.UtilCallback;
 
 /**
  * User: Ryan
@@ -67,5 +69,20 @@ public class DBConfig {
 
     public DBTable newDBTable() {
         return new SQLiteTable();
+    }
+
+    public void executeUpdateSQL(UtilCallback<String> callback) {
+    }
+
+    public boolean needUpdateDB(){
+        return false;
+    }
+
+    public boolean isExecSQLUpdating() {
+        return false;
+    }
+
+    public void onCreateDatabase(Database db) {
+
     }
 }

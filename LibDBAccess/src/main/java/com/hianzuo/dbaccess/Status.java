@@ -29,6 +29,14 @@ public enum Status {
         return label;
     }
 
+    public static boolean isAvailable(Status status) {
+        return
+                null != status && (
+                        Status.AUDITED == status ||
+                                Status.ACTIVATED == status ||
+                                Status.NEW == status
+                );
+    }
     public static boolean isAvailable(String status) {
         return
                 null != status && (

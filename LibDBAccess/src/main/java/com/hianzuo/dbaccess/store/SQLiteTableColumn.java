@@ -3,11 +3,13 @@ package com.hianzuo.dbaccess.store;
 import com.hianzuo.dbaccess.Dto;
 import com.hianzuo.dbaccess.inject.Column;
 import com.hianzuo.dbaccess.inject.Table;
+import com.hianzuo.dbaccess.lang.DbList;
 import com.hianzuo.dbaccess.throwable.DBRuntimeException;
 import com.hianzuo.dbaccess.util.StringUtil;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.List;
 
 /**
  * User: Ryan
@@ -16,17 +18,28 @@ import java.math.BigInteger;
  */
 @Table(name = "app_table_columns")
 public class SQLiteTableColumn extends Dto {
-    @Column(id = 10) Integer tid; //表ID
-    @Column(id = 13) Float cid; //字段唯一值
-    @Column(id = 14, name = "_name") String name;//字段名
-    @Column(id = 15, name = "_type") String type;//类型
-    @Column(id = 16, canull = true) Integer len;//长度
-    @Column(id = 17) boolean pk = false;//是否主键
-    @Column(id = 18) boolean aicr = false;//是否自增长
-    @Column(id = 19) boolean canull = false;//能否NULL
-    @Column(id = 20, name = "_unique") boolean unique = false;//是否唯一
-    @Column(id = 21, name = "_check", canull = true) String check;//检查
-    @Column(id = 22, canull = true) String def;//默认值
+    @Column(id = 10)
+    Integer tid; //表ID
+    @Column(id = 13)
+    Float cid; //字段唯一值
+    @Column(id = 14, name = "_name")
+    String name;//字段名
+    @Column(id = 15, name = "_type")
+    String type;//类型
+    @Column(id = 16, canull = true)
+    Integer len;//长度
+    @Column(id = 17)
+    boolean pk = false;//是否主键
+    @Column(id = 18)
+    boolean aicr = false;//是否自增长
+    @Column(id = 19)
+    boolean canull = false;//能否NULL
+    @Column(id = 20, name = "_unique")
+    boolean unique = false;//是否唯一
+    @Column(id = 21, name = "_check", canull = true)
+    String check;//检查
+    @Column(id = 22, canull = true)
+    String def;//默认值
     private Class<?> fieldClass;//Dto属性类型
     private String typeAndLen;//like varchar(32)
     private String mCreateTableSQL;
@@ -205,6 +218,10 @@ public class SQLiteTableColumn extends Dto {
             return "integer";
         } else if (Enum.class.isAssignableFrom(type)) {
             return "varchar";
+        } else if (DbList.class.isAssignableFrom(type)) {
+            return "text";
+        } else if (List.class.isAssignableFrom(type)) {
+            return "text";
         } else {
             throw new RuntimeException("can't support for type " + type.getName());
         }
